@@ -1,0 +1,57 @@
+# One term per line. These words and names are given to Whisper as hints so it spells them the way you do.
+# Edit and save: the change applies on the next dictation, no restart needed.
+Claude Code
+Claude
+Anthropic
+Google Gemini
+Gemini
+Google Antigravity
+Antigravity
+Higgsfield
+HyperFrames
+Instagram
+LinkedIn
+GitHub
+Figma
+Canva
+Netlify
+Zapier
+Playwright
+Firecrawl
+VoiceStudio
+Whisper
+Python
+JavaScript
+PowerShell
+dashboard
+prompt
+skill
+MCP
+API
+PDF
+Composio
+effort
+Medium
+High
+Max
+Opus
+Sonnet
+Fable
+benchmark
+Voice Typing
+Zotero
+MarkItDown
+Remotion
+Blender
+React
+Tailwind
+TypeScript
+desktop
+download
+Terminal
+OpenMontage
+habibi-voice
+workflow
+pipeline
+backend
+frontend

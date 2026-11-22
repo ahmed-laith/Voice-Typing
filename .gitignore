@@ -1,0 +1,34 @@
+# Python & Virtual Environments
+.venv/
+.venv-tools/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Models & Large Binaries
+models/
+*.bin
+*.pt
+*.onnx
+
+# User Audio & History (Privacy)
+samples/auto/*.wav
+samples/*.wav
+*.wav
+history.jsonl
+last_recording.wav
+voice_typing.log
+benchmark_results*.json
+model_scout_state.json
+maintenance_report.txt
+
+# Private API Keys (CRITICAL)
+gemini_key.txt
+anthropic_key.txt
+*.key
+.env
+
+# Backups & Temp
+_backups/
+panel_position.json
+run_queue.done

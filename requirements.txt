@@ -1,0 +1,11 @@
+anthropic
+faster-whisper
+keyboard
+numpy
+nvidia-cublas-cu12
+nvidia-cudnn-cu12
+pillow
+pyperclip
+pystray
+sounddevice
+httpx
