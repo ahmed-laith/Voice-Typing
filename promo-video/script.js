@@ -98,6 +98,15 @@ function updateScene(time) {
     }
   });
 
+  // Update scene tab active classes
+  document.querySelectorAll('.scene-tab').forEach((tab, idx) => {
+    if (idx === activeIndex) {
+      tab.classList.add('active');
+    } else {
+      tab.classList.remove('active');
+    }
+  });
+
   // Audio Sync
   if (activeIndex !== currentSceneIndex) {
     currentSceneIndex = activeIndex;
@@ -181,5 +190,47 @@ btnPlay.addEventListener('click', play);
 btnReset.addEventListener('click', reset);
 if (btnAudioToggle) btnAudioToggle.addEventListener('click', toggleAudio);
 
-// Initial state
-updateScene(0);
+// Scene tabs navigation
+document.querySelectorAll('.scene-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    const idx = parseInt(tab.getAttribute('data-scene'), 10);
+    if (idx >= 0 && idx < scenes.length) {
+      currentTime = scenes[idx].start;
+      updateScene(currentTime);
+      if (isPlaying) {
+        syncAudio(currentTime, idx);
+      }
+    }
+  });
+});
+
+// Clickable progress bar to seek
+const reelProgress = document.querySelector('.reel-progress');
+if (reelProgress) {
+  reelProgress.addEventListener('click', (e) => {
+    const rect = reelProgress.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const ratio = Math.max(0, Math.min(1, clickX / rect.width));
+    currentTime = ratio * totalDuration;
+    updateScene(currentTime);
+    if (isPlaying) {
+      syncAudio(currentTime, currentSceneIndex);
+    }
+  });
+}
+
+// Initial state / URL parameter jump
+const urlParams = new URLSearchParams(window.location.search);
+const targetSceneParam = urlParams.get('scene');
+if (targetSceneParam) {
+  const sceneNum = parseInt(targetSceneParam, 10);
+  if (sceneNum >= 1 && sceneNum <= scenes.length) {
+    const s = scenes[sceneNum - 1];
+    currentTime = s.start + (sceneNum === 3 ? 5.0 : 1.0);
+    updateScene(currentTime);
+  } else {
+    updateScene(0);
+  }
+} else {
+  updateScene(0);
+}
