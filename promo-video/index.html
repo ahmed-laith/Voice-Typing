@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Voice Typing - Vox Motion Graphic Reel</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Controls Bar -->
+  <header class="top-nav">
+    <div class="logo">VOICE TYPING <span>REEL</span></div>
+    <div class="controls">
+      <button id="btnPlay" class="control-btn primary">تشغيل العرض ▶</button>
+      <button id="btnReset" class="control-btn secondary">إعادة من البداية ↺</button>
+      <button id="btnAudioToggle" class="control-btn secondary">الصوت: مفعل 🔊</button>
+      <span id="timecode" class="timecode">00:00 / 00:40</span>
+    </div>
+  </header>
+
+  <!-- Main Reel Container (9:16 Aspect Ratio) -->
+  <main class="reel-wrapper">
+    <div class="reel-canvas" id="reelCanvas">
+
+      <!-- Background Grain & Texture -->
+      <div class="paper-texture"></div>
+      <div class="grid-overlay"></div>
+
+      <!-- Watermark / Brand Tag -->
+      <div class="brand-tag">@ahmed.laith</div>
+
+      <!-- SCENE 1: The Windows Problem (00:00 - 00:08) -->
+      <section class="scene" id="scene1">
+        <div class="scene-content">
+          <div class="tag-badge red">المشكلة الحقيقية</div>
+          <h1 class="vox-title">
+            ويندوز <span class="marker-orange">ما يدعم عربي</span> أصلاً؟!
+          </h1>
+
+          <!-- Windows UI Mockup Card -->
+          <div class="windows-ui-card">
+            <div class="win-header">
+              <span class="win-btn red"></span>
+              <span class="win-btn yellow"></span>
+              <span class="win-btn green"></span>
+              <span class="win-title">Windows Dictation (Win + H)</span>
+            </div>
+            <div class="win-body">
+              <div class="mic-icon-striked">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path>
+                  <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                  <line x1="12" y1="19" x2="12" y2="23"></line>
+                  <line x1="8" y1="23" x2="16" y2="23"></line>
+                  <line x1="3" y1="3" x2="21" y2="21" stroke="#FF3B30" stroke-width="2.5"></line>
+                </svg>
+              </div>
+              <div class="win-error-box">
+                <span class="error-badge">ERROR</span>
+                <p>Voice typing is not available in Arabic</p>
+              </div>
+            </div>
+            <!-- Rubber Stamp Error -->
+            <div class="rubber-stamp">غير مدعوم!</div>
+          </div>
+
+          <div class="vox-card note-card">
+            <p>وإذا فكرت تحچي بلهجتك العراقية.. <b>انسى الموضوع تماماً!</b></p>
+          </div>
+        </div>
+      </section>
+
+      <!-- SCENE 2: The Co-Creation (00:08 - 00:18) -->
+      <section class="scene" id="scene2">
+        <div class="scene-content">
+          <div class="tag-badge orange">الحل المبتكر</div>
+          <h1 class="vox-title">
+            برمجنا البديل بواسطة <br>
+            <span class="marker-orange">Claude & Antigravity</span>
+          </h1>
+
+          <!-- Tech Stack Collage -->
+          <div class="collage-container">
+            <div class="paper-card tool-card anthropic">
+              <div class="tool-logo">Claude Code</div>
+              <p>هندسة الأكواد والمعالجة الفورية</p>
+            </div>
+            <div class="plus-sign">+</div>
+            <div class="paper-card tool-card google">
+              <div class="tool-logo">Google Antigravity</div>
+              <p>توجيه الوكلاء والربط الذكي</p>
+            </div>
+          </div>
+
+          <!-- Product Emerges -->
+          <div class="product-banner">
+            <div class="orb-bubble yellow">
+              <div class="sound-wave">
+                <span></span><span></span><span></span><span></span><span></span>
+              </div>
+            </div>
+            <div class="product-info">
+              <h3>Voice Typing (F1)</h3>
+              <p>خفيف · محلي · يفهم اللهجات</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SCENE 3: Live Demo (00:18 - 00:28) -->
+      <section class="scene" id="scene3">
+        <div class="scene-content">
+          <div class="tag-badge green">تجربة حية وسريعة</div>
+          <h1 class="vox-title">
+            اضغط F1 واحچي <br>
+            <span class="marker-orange">عراقي + إنجليزي</span> معاً!
+          </h1>
+
+          <!-- Simulated Desktop Editor -->
+          <div class="editor-window">
+            <div class="editor-header">
+              <span class="file-name">Terminal / Prompt</span>
+              <span class="badge-tag">CUDA RTX 3050</span>
+            </div>
+            <div class="editor-body">
+              <span class="prompt-arrow">❯</span>
+              <span id="typedText" class="typed-text"></span>
+              <span class="cursor-blink">|</span>
+            </div>
+          </div>
+
+          <!-- Callout Badges -->
+          <div class="callouts-row">
+            <div class="callout-card">
+              <span class="callout-pin">📍</span>
+              <p><b>حرف الـ چ:</b> يكتب چاي وأحچي وهيچ بدقة</p>
+            </div>
+            <div class="callout-card">
+              <span class="callout-pin">📍</span>
+              <p><b>المصطلحات:</b> يكتب Python و GitHub بلاتينية نظيفة</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SCENE 4: Local Offline & Gemini Polish (00:28 - 00:36) -->
+      <section class="scene" id="scene4">
+        <div class="scene-content">
+          <div class="tag-badge orange">القوة الخفية</div>
+          <h1 class="vox-title">
+            محلي 100% بدون إنترنت <br>
+            <span class="marker-orange">+ تنظيف التأتأة</span>
+          </h1>
+
+          <div class="feature-duo">
+            <div class="duo-card gpu-card">
+              <div class="icon">⚡</div>
+              <h4>محلي على كرت الشاشة</h4>
+              <p>أسرع بـ 8.6x من الوقت الحقيقي وبصفر تأخير</p>
+            </div>
+            <div class="duo-card gemini-card">
+              <div class="icon">✨</div>
+              <h4>Gemini Flash ذكي</h4>
+              <p>يحذف التأتأة والتردد ويصفي الجملة بثانية</p>
+            </div>
+          </div>
+
+          <!-- Stutter Comparison Card -->
+          <div class="before-after-box">
+            <div class="ba-row before">
+              <span class="ba-label">الصوت بالتردد:</span>
+              <p class="striked">«اكتبلي كابشن... لا لا مو كابشن، بوست كامل»</p>
+            </div>
+            <div class="ba-row after">
+              <span class="ba-label">النتيجة بعد التنظيف:</span>
+              <p class="highlight">«اكتبلي بوست كامل باللهجة العراقية.»</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SCENE 5: Download & CTA (00:36 - 00:42) -->
+      <section class="scene" id="scene5">
+        <div class="scene-content">
+          <div class="tag-badge green">متاح للجميع مجاناً</div>
+          <h1 class="vox-title">
+            حملها بضغطة زر <br>
+            <span class="marker-orange">من GitHub الآن!</span>
+          </h1>
+
+          <!-- GitHub Repo Card -->
+          <div class="github-repo-card">
+            <div class="gh-header">
+              <svg class="gh-icon" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
+              </svg>
+              <span>ahmed-laith / Voice-Typing</span>
+            </div>
+            <div class="setup-pill">
+              <span class="file-icon">⚡</span>
+              <span class="file-text">setup.bat</span>
+              <span class="click-badge">نقرة واحدة للتثبيت</span>
+            </div>
+            <div class="repo-url">github.com/ahmed-laith/Voice-Typing</div>
+          </div>
+
+          <div class="cta-banner">
+            <p>🔗 الرابط موجود بالبايو / وبأول تعليق</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Progress Bar -->
+      <div class="reel-progress">
+        <div id="progressBar" class="progress-fill"></div>
+      </div>
+
+    </div>
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>
