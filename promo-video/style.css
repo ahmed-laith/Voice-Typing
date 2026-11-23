@@ -34,6 +34,40 @@ body {
   overflow-x: hidden;
 }
 
+/* Export Mode for 1080x1920 High Resolution Video */
+body.export-mode {
+  padding: 0 !important;
+  margin: 0 !important;
+  width: 1080px !important;
+  height: 1920px !important;
+  background-color: var(--bg-dark) !important;
+  overflow: hidden !important;
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+}
+
+body.export-mode .top-nav,
+body.export-mode .scenes-nav {
+  display: none !important;
+}
+
+body.export-mode .reel-wrapper {
+  width: 420px !important;
+  height: 746px !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  transform: scale(2.5714) !important;
+  transform-origin: center center !important;
+}
+
+body.export-mode *,
+body.export-mode *::before,
+body.export-mode *::after {
+  transition: none !important;
+  animation-duration: 0s !important;
+}
+
 /* Top Navigation Bar */
 .top-nav {
   width: 100%;
@@ -267,8 +301,18 @@ body {
   height: 42%;
   background-color: var(--accent-orange);
   z-index: -1;
-  transform: rotate(-1deg);
+  transform: rotate(-1deg) scaleX(0);
+  transform-origin: right center;
   border-radius: 2px;
+}
+
+.scene.active .marker-orange::after {
+  animation: voxMarkerDraw 0.6s cubic-bezier(0.2, 0.9, 0.3, 1) 0.3s forwards;
+}
+
+@keyframes voxMarkerDraw {
+  0% { transform: rotate(-1deg) scaleX(0); }
+  100% { transform: rotate(-1deg) scaleX(1); }
 }
 
 /* Scene 1: Windows UI Mockup */
@@ -282,6 +326,15 @@ body {
   position: relative;
   transform: rotate(-1.5deg);
   margin-top: 10px;
+}
+
+.scene.active .windows-ui-card {
+  animation: voxCardPunch 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) both;
+}
+
+@keyframes voxCardPunch {
+  0% { transform: scale(0.85) translateY(30px) rotate(-4deg); opacity: 0; }
+  100% { transform: scale(1) translateY(0) rotate(-1.5deg); opacity: 1; }
 }
 
 .win-header {
@@ -361,6 +414,18 @@ body {
   transform: rotate(-18deg) scale(1.1);
   box-shadow: 0 0 15px rgba(255, 59, 48, 0.4);
   background: rgba(11, 11, 11, 0.85);
+  opacity: 0;
+}
+
+.scene.active .rubber-stamp {
+  animation: voxStampSlam 0.45s cubic-bezier(0.175, 0.885, 0.32, 1.275) 0.5s forwards;
+}
+
+@keyframes voxStampSlam {
+  0% { transform: scale(3.2) rotate(-35deg); opacity: 0; }
+  65% { transform: scale(0.92) rotate(-16deg); opacity: 1; }
+  85% { transform: scale(1.08) rotate(-19deg); }
+  100% { transform: scale(1.0) rotate(-18deg); opacity: 1; }
 }
 
 .vox-card.note-card {
@@ -371,6 +436,15 @@ body {
   font-size: 0.95rem;
   transform: rotate(1deg);
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+}
+
+.scene.active .vox-card.note-card {
+  animation: voxNoteFloat 0.6s cubic-bezier(0.2, 0.9, 0.3, 1) 0.8s both;
+}
+
+@keyframes voxNoteFloat {
+  0% { transform: translateY(20px) rotate(4deg); opacity: 0; }
+  100% { transform: translateY(0) rotate(1deg); opacity: 1; }
 }
 
 /* Scene 2: Tech Collage */
@@ -391,8 +465,30 @@ body {
   transform: rotate(-1.5deg);
 }
 
+.paper-card.tool-card.anthropic {
+  transform: rotate(-2deg);
+}
+
+.scene.active .paper-card.tool-card.anthropic {
+  animation: voxSlideRight 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) 0.2s both;
+}
+
+@keyframes voxSlideRight {
+  0% { transform: translateX(60px) rotate(5deg); opacity: 0; }
+  100% { transform: translateX(0) rotate(-2deg); opacity: 1; }
+}
+
 .paper-card.tool-card.google {
-  transform: rotate(1.5deg);
+  transform: rotate(2deg);
+}
+
+.scene.active .paper-card.tool-card.google {
+  animation: voxSlideLeft 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) 0.35s both;
+}
+
+@keyframes voxSlideLeft {
+  0% { transform: translateX(-60px) rotate(-5deg); opacity: 0; }
+  100% { transform: translateX(0) rotate(2deg); opacity: 1; }
 }
 
 .tool-logo {
@@ -414,6 +510,15 @@ body {
   color: var(--accent-orange);
 }
 
+.scene.active .plus-sign {
+  animation: voxPop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) 0.5s both;
+}
+
+@keyframes voxPop {
+  0% { transform: scale(0); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
 .product-banner {
   background: #181818;
   border: 1px solid rgba(255, 106, 0, 0.4);
@@ -424,6 +529,15 @@ body {
   gap: 16px;
   width: 100%;
   box-shadow: 0 12px 30px rgba(255, 106, 0, 0.15);
+}
+
+.scene.active .product-banner {
+  animation: voxBannerRise 0.7s cubic-bezier(0.2, 0.9, 0.3, 1) 0.7s both;
+}
+
+@keyframes voxBannerRise {
+  0% { transform: translateY(30px) scale(0.95); opacity: 0; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
 }
 
 .orb-bubble.yellow {
@@ -482,6 +596,15 @@ body {
   box-shadow: 0 14px 30px rgba(0, 0, 0, 0.7);
   overflow: hidden;
   text-align: right;
+}
+
+.scene.active .editor-window {
+  animation: voxEditorPunch 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) 0.2s both;
+}
+
+@keyframes voxEditorPunch {
+  0% { transform: scale(0.9) translateY(20px); opacity: 0; }
+  100% { transform: scale(1) translateY(0); opacity: 1; }
 }
 
 .editor-header {
@@ -547,6 +670,19 @@ body {
   text-align: right;
 }
 
+.scene.active .callout-card:nth-child(1) {
+  animation: voxDropPin 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) 0.5s both;
+}
+
+.scene.active .callout-card:nth-child(2) {
+  animation: voxDropPin 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) 0.7s both;
+}
+
+@keyframes voxDropPin {
+  0% { transform: translateY(-15px) scale(0.9); opacity: 0; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+
 .callout-card p {
   font-size: 0.75rem;
   line-height: 1.35;
@@ -567,6 +703,14 @@ body {
   border-radius: 12px;
   padding: 16px 12px;
   text-align: center;
+}
+
+.scene.active .duo-card.gpu-card {
+  animation: voxSlideRight 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) 0.2s both;
+}
+
+.scene.active .duo-card.gemini-card {
+  animation: voxSlideLeft 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) 0.35s both;
 }
 
 .duo-card .icon {
@@ -599,6 +743,10 @@ body {
   text-align: right;
 }
 
+.scene.active .before-after-box {
+  animation: voxBannerRise 0.6s cubic-bezier(0.2, 0.9, 0.3, 1) 0.5s both;
+}
+
 .ba-row {
   display: flex;
   flex-direction: column;
@@ -614,14 +762,42 @@ body {
 .ba-row.before p.striked {
   font-size: 0.85rem;
   color: #888;
-  text-decoration: line-through;
+  position: relative;
+  display: inline-block;
   opacity: 0.7;
+}
+
+.scene.active .ba-row.before p.striked::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: 0;
+  left: 0;
+  height: 2px;
+  background: #FF3B30;
+  transform-origin: right center;
+  animation: voxStrikeThrough 0.5s cubic-bezier(0.2, 0.9, 0.3, 1) 0.8s both;
+}
+
+@keyframes voxStrikeThrough {
+  0% { transform: scaleX(0); }
+  100% { transform: scaleX(1); }
 }
 
 .ba-row.after p.highlight {
   font-size: 0.95rem;
   font-weight: 700;
   color: #34C759;
+}
+
+.scene.active .ba-row.after p.highlight {
+  animation: voxGlowText 0.6s ease-in-out 1.2s both;
+}
+
+@keyframes voxGlowText {
+  0% { transform: scale(0.96); opacity: 0.6; }
+  50% { transform: scale(1.04); text-shadow: 0 0 14px rgba(52, 199, 89, 0.8); }
+  100% { transform: scale(1); opacity: 1; }
 }
 
 /* Scene 5: GitHub CTA */
@@ -636,6 +812,15 @@ body {
   align-items: center;
   gap: 14px;
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.7);
+}
+
+.scene.active .github-repo-card {
+  animation: voxRepoFloat 0.7s cubic-bezier(0.175, 0.885, 0.32, 1.275) 0.2s both;
+}
+
+@keyframes voxRepoFloat {
+  0% { transform: scale(0.9) translateY(30px); opacity: 0; }
+  100% { transform: scale(1) translateY(0); opacity: 1; }
 }
 
 .gh-header {
@@ -664,6 +849,15 @@ body {
   box-shadow: 0 8px 25px rgba(255, 106, 0, 0.4);
 }
 
+.scene.active .setup-pill {
+  animation: voxPulsePill 1.2s ease-in-out infinite alternate 0.8s;
+}
+
+@keyframes voxPulsePill {
+  0% { transform: scale(1); box-shadow: 0 8px 25px rgba(255, 106, 0, 0.4); }
+  100% { transform: scale(1.05); box-shadow: 0 12px 35px rgba(255, 106, 0, 0.7); }
+}
+
 .file-text {
   font-family: var(--font-mono);
   font-size: 1rem;
@@ -690,6 +884,15 @@ body {
   font-weight: 700;
   font-size: 0.9rem;
   color: var(--accent-orange);
+}
+
+.scene.active .cta-banner {
+  animation: voxBouncePop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) 0.6s both;
+}
+
+@keyframes voxBouncePop {
+  0% { transform: scale(0.8); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
 }
 
 /* Progress Fill */

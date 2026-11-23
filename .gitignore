@@ -32,3 +32,8 @@ anthropic_key.txt
 _backups/
 panel_position.json
 run_queue.done
+
+# Video Render & Private media
+*.mp4
+promo-video/render_1080p/
+promo-video/*.mp4

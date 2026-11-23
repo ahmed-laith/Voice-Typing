@@ -1,14 +1,14 @@
 // VOX MOTION STYLE CONTROLLER WITH SYNCED HABIBI-TTS AUDIO
 
 const scenes = [
-  { id: 'scene1', start: 0, duration: 8.5, audioSrc: 'audio/01.wav' },
-  { id: 'scene2', start: 8.5, duration: 7.5, audioSrc: 'audio/02.wav' },
-  { id: 'scene3', start: 16.0, duration: 9.5, audioSrc: 'audio/03.wav' },
-  { id: 'scene4', start: 25.5, duration: 8.5, audioSrc: 'audio/04.wav' },
-  { id: 'scene5', start: 34.0, duration: 6.0, audioSrc: null }
+  { id: 'scene1', start: 0, duration: 7.0, audioSrc: 'audio/01.wav' },
+  { id: 'scene2', start: 7.0, duration: 5.5, audioSrc: 'audio/02.wav' },
+  { id: 'scene3', start: 12.5, duration: 7.5, audioSrc: 'audio/03.wav' },
+  { id: 'scene4', start: 20.0, duration: 6.5, audioSrc: 'audio/04.wav' },
+  { id: 'scene5', start: 26.5, duration: 5.5, audioSrc: null }
 ];
 
-const totalDuration = 40; // seconds
+const totalDuration = 32; // seconds
 let currentTime = 0;
 let isPlaying = false;
 let isAudioEnabled = true;
@@ -126,6 +126,29 @@ function updateScene(time) {
     typedTextEl.textContent = demoSpeechText;
   }
 
+  // Progressive sub-timing for animations
+  const stampEl = document.querySelector('.rubber-stamp');
+  if (stampEl) {
+    if (activeIndex === 0 && (time - scenes[0].start) >= 1.2) {
+      stampEl.style.opacity = '1';
+      stampEl.style.transform = 'rotate(-18deg) scale(1)';
+    } else if (activeIndex === 0) {
+      stampEl.style.opacity = '0';
+      stampEl.style.transform = 'rotate(-35deg) scale(3)';
+    }
+  }
+
+  const strikedEl = document.querySelector('.ba-row.before p.striked');
+  if (strikedEl) {
+    if (activeIndex === 3 && (time - scenes[3].start) >= 1.2) {
+      strikedEl.style.textDecoration = 'line-through';
+      strikedEl.style.opacity = '0.5';
+    } else if (activeIndex === 3) {
+      strikedEl.style.textDecoration = 'none';
+      strikedEl.style.opacity = '1';
+    }
+  }
+
   // Update progress bar & timecode
   const progressPercent = Math.min(100, (time / totalDuration) * 100);
   progressBar.style.width = `${progressPercent}%`;
@@ -221,8 +244,15 @@ if (reelProgress) {
 
 // Initial state / URL parameter jump
 const urlParams = new URLSearchParams(window.location.search);
+if (urlParams.get('export') === '1') {
+  document.body.classList.add('export-mode');
+}
+const timeParam = urlParams.get('time');
 const targetSceneParam = urlParams.get('scene');
-if (targetSceneParam) {
+if (timeParam !== null) {
+  currentTime = parseFloat(timeParam);
+  updateScene(currentTime);
+} else if (targetSceneParam) {
   const sceneNum = parseInt(targetSceneParam, 10);
   if (sceneNum >= 1 && sceneNum <= scenes.length) {
     const s = scenes[sceneNum - 1];

@@ -234,6 +234,57 @@ def review_save(item_id: str, text: str) -> dict:
     return {"ok": True, "suggestions": suggest_rules(hyp, text) if text.strip() != hyp.strip() else []}
 
 
+def review_add_vocab(word: str) -> dict:
+    w = word.strip()
+    if not w:
+        return {"error": "empty word"}
+    vocab_file = vt.APP_DIR / "vocabulary.txt"
+    existing = set()
+    if vocab_file.exists():
+        existing = {l.strip().lower() for l in vocab_file.read_text(encoding="utf-8-sig").splitlines() if l.strip()}
+    if w.lower() in existing:
+        return {"ok": True, "added": False, "msg": "موجود مسبقاً في القاموس"}
+    with vocab_file.open("a", encoding="utf-8") as f:
+        f.write(("\n" if vocab_file.exists() and not vocab_file.read_text(encoding="utf-8-sig").endswith("\n") else "") + w + "\n")
+    return {"ok": True, "added": True, "msg": "أُضيف للقاموس بنجاح"}
+
+
+def review_ai_action(text: str, action: str) -> dict:
+    t = text.strip()
+    if not t:
+        return {"error": "النص فارغ"}
+
+    key_file = vt.APP_DIR / "gemini_key.txt"
+    if not key_file.exists():
+        return {"error": "لم يتم العثور على مفتاح Gemini في gemini_key.txt"}
+    key = key_file.read_text(encoding="utf-8").strip()
+    if not key:
+        return {"error": "مفتاح Gemini فارغ"}
+
+    prompts = {
+        "summary": "أنت مساعد شخصي ذكي. لخص هذا النص الصوتي باللغة العربية في 2 إلى 3 نقاط رئيسية واضحة ومباشرة بدون أي مقدمات أو استطراد:\n\n",
+        "prompt": "أنت خبير هندسة برومبتات ذكاء اصطناعي (Prompt Engineer). خذ هذا الكلام الشفوي العفوي وحوله إلى برومبت تنفيذي هندسي منظم ومفصل وموجه لوكلاء الذكاء الاصطناعي (Claude Code / Antigravity) لتنفيذ المطلوب بأعلى دقة:\n\n",
+        "formal": "أنت كاتب محترف. أعد صياغة هذا الكلام الشفوي العربي إلى رسالة أو بريد إلكتروني رسمي، رصين، وأنيق وخالٍ من الأخطاء وجاهز للإرسال مباشرة:\n\n",
+        "polish": "أنت مصفي نصوص ذكي. أزل التأتأة والتردد وتكرار الكلمات غير المفيد من هذا النص الصوتي، واجعله نصاً طبيعياً وسلساً مع الحفاظ على لهجة المتكلم وكلماته الأصلية:\n\n"
+    }
+    system_prompt = prompts.get(action, prompts["summary"])
+
+    import urllib.request
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key={key}"
+    payload = {
+        "contents": [{"parts": [{"text": system_prompt + t}]}],
+        "generationConfig": {"temperature": 0.2, "maxOutputTokens": 1024}
+    }
+    req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers={"Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=12) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            out = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+            return {"ok": True, "result": out}
+    except Exception as e:
+        return {"error": str(e)}
+
+
 def review_delete(item_id: str) -> dict:
     with _auto_lock:
         data = load_auto()
@@ -421,6 +472,10 @@ class Handler(BaseHTTPRequestHandler):
                 self._json({"added": add_rule(data["wrong"], data["right"])})
             elif self.path == "/api/review/delete":
                 self._json(review_delete(data["id"]))
+            elif self.path == "/api/review/ai_action":
+                self._json(review_ai_action(data.get("text", ""), data.get("action", "summary")))
+            elif self.path == "/api/review/vocab":
+                self._json(review_add_vocab(data.get("word", "")))
             elif self.path == "/api/rules/add":
                 self._json(rules_add(data.get("wrong", ""), data.get("right", ""), data.get("section", "")))
             elif self.path == "/api/rules/delete":
@@ -626,109 +681,1325 @@ REVIEW_PAGE = r"""<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>مراجعة إملاءاتك</title>
+<title>مكتبة Voice Typing الذكية</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
-  :root { --bg:#141418; --card:#1f1f26; --line:#34343f; --text:#f1f1f4; --muted:#9a9aa8;
-          --green:#3ecf8e; --blue:#4f9dff; --red:#e5484d; --yellow:#facc15; }
-  * { box-sizing: border-box; }
-  body { margin:0; background:var(--bg); color:var(--text); font-family:"Segoe UI", Tahoma, sans-serif; }
-  main { max-width: 860px; margin: 0 auto; padding: 28px 16px 60px; }
-  h1 { font-size: 22px; margin: 0 0 4px; }
-  .sub { color: var(--muted); margin: 0 0 16px; line-height: 1.8; }
-  a { color: var(--blue); }
-  .bar { display:flex; gap:14px; align-items:center; flex-wrap:wrap; margin: 0 0 18px; color: var(--muted); }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 18px; margin-bottom: 14px; }
-  .card.done { border-color: #1f5c43; }
-  .meta { color: var(--muted); font-size: 13px; margin-bottom: 8px; display:flex; gap:12px; flex-wrap:wrap; }
-  .tag { background:#2b2b35; border-radius:8px; padding:1px 8px; }
-  .wrote { color: var(--muted); font-size: 14px; margin: 6px 0 4px; }
-  .hyp { font-size: 17px; line-height: 1.8; color:#c9c9d3; margin-bottom: 10px; white-space: pre-wrap; }
-  textarea { width:100%; background:#16161b; color:var(--text); border:1px solid var(--line); border-radius:12px;
-             padding:10px 12px; font: inherit; font-size: 18px; line-height: 1.8; resize: vertical; }
-  audio { width:100%; margin: 4px 0 8px; height: 38px; }
-  .row { display:flex; gap:10px; margin-top:10px; flex-wrap:wrap; }
-  button { background:#2b2b35; color:var(--text); border:1px solid var(--line); border-radius:10px; padding:8px 16px;
-           font: inherit; cursor:pointer; }
-  button.ok { background:#173a2c; border-color: var(--green); color: var(--green); }
-  button.primary { background: var(--blue); border-color: var(--blue); color:#0b1220; font-weight:600; }
-  button.del { color: var(--red); }
-  .sugg { margin-top:12px; padding:10px 12px; background:#1a2433; border:1px solid #2c4468; border-radius:12px; line-height:2; }
-  .chip { display:inline-flex; gap:8px; align-items:center; background:#16161b; border:1px solid var(--line);
-          border-radius:10px; padding:2px 6px 2px 10px; margin:2px 4px; }
-  .chip button { padding:2px 10px; font-size:13px; }
-  .status { color: var(--green); font-size: 14px; margin-top: 8px; min-height: 20px; }
-  .empty { color: var(--muted); text-align:center; padding: 40px 0; }
+  :root {
+    --bg-dark: #0B0B0B;
+    --surface: #141417;
+    --surface-card: #18181D;
+    --surface-hover: #1E1E24;
+    --border: rgba(247, 247, 245, 0.08);
+    --border-focus: rgba(255, 106, 0, 0.5);
+    --text-primary: #F7F7F5;
+    --text-muted: #9E9EA8;
+    --accent-orange: #FF6A00;
+    --accent-orange-dim: rgba(255, 106, 0, 0.15);
+    --green: #34C759;
+    --green-dim: rgba(52, 199, 89, 0.15);
+    --blue: #0A84FF;
+    --blue-dim: rgba(10, 132, 255, 0.15);
+    --purple: #BF5AF2;
+    --purple-dim: rgba(191, 90, 242, 0.15);
+    --red: #FF453A;
+    --red-dim: rgba(255, 69, 58, 0.15);
+    --yellow: #FFD60A;
+    --font-arabic: 'Tajawal', -apple-system, BlinkMacSystemFont, "Segoe UI", Tahoma, sans-serif;
+    --font-mono: 'JetBrains Mono', Consolas, monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background-color: var(--bg-dark);
+    color: var(--text-primary);
+    font-family: var(--font-arabic);
+    line-height: 1.6;
+    min-height: 100vh;
+    padding-bottom: 60px;
+  }
+
+  /* Sticky Top Bar */
+  .top-header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(11, 11, 11, 0.92);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 20px;
+  }
+
+  .header-inner {
+    max-width: 1080px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .brand .logo-icon {
+    width: 34px;
+    height: 34px;
+    background: var(--accent-orange);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    box-shadow: 0 4px 12px rgba(255, 106, 0, 0.35);
+  }
+
+  .brand h1 {
+    font-size: 1.25rem;
+    font-weight: 900;
+    letter-spacing: -0.3px;
+  }
+
+  .brand h1 span {
+    color: var(--accent-orange);
+  }
+
+  .nav-links {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .nav-btn {
+    font-family: var(--font-arabic);
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-decoration: none;
+    padding: 6px 14px;
+    border-radius: 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    transition: all 0.2s ease;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .nav-btn:hover {
+    color: var(--text-primary);
+    border-color: rgba(255, 255, 255, 0.2);
+    background: var(--surface-hover);
+  }
+
+  .nav-btn.primary {
+    background: var(--accent-orange-dim);
+    color: var(--accent-orange);
+    border-color: rgba(255, 106, 0, 0.35);
+  }
+
+  .nav-btn.primary:hover {
+    background: var(--accent-orange);
+    color: #fff;
+  }
+
+  /* Main Container */
+  main {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 24px 16px;
+  }
+
+  /* KPI Metrics Grid */
+  .metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 14px;
+    margin-bottom: 24px;
+  }
+
+  .metric-card {
+    background: var(--surface-card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px 18px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+    transition: transform 0.2s ease, border-color 0.2s ease;
+  }
+
+  .metric-card:hover {
+    transform: translateY(-2px);
+    border-color: rgba(255, 255, 255, 0.15);
+  }
+
+  .metric-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.3rem;
+  }
+
+  .metric-icon.orange { background: var(--accent-orange-dim); color: var(--accent-orange); }
+  .metric-icon.green { background: var(--green-dim); color: var(--green); }
+  .metric-icon.blue { background: var(--blue-dim); color: var(--blue); }
+  .metric-icon.purple { background: var(--purple-dim); color: var(--purple); }
+
+  .metric-info h4 {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    margin-bottom: 2px;
+  }
+
+  .metric-info .val {
+    font-family: var(--font-mono);
+    font-size: 1.4rem;
+    font-weight: 800;
+    color: var(--text-primary);
+  }
+
+  /* Search & Filter Toolbar */
+  .toolbar {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 16px;
+    margin-bottom: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .search-wrapper {
+    position: relative;
+    width: 100%;
+  }
+
+  .search-icon {
+    position: absolute;
+    right: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 1.1rem;
+    color: var(--text-muted);
+    pointer-events: none;
+  }
+
+  .search-input {
+    width: 100%;
+    background: #0E0E11;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 44px 12px 38px;
+    font-family: var(--font-arabic);
+    font-size: 1rem;
+    color: var(--text-primary);
+    transition: all 0.2s ease;
+  }
+
+  .search-input:focus {
+    outline: none;
+    border-color: var(--accent-orange);
+    box-shadow: 0 0 0 3px rgba(255, 106, 0, 0.15);
+  }
+
+  .search-clear {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 1rem;
+    display: none;
+  }
+
+  .filter-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .chips-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .filter-label {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    margin-left: 4px;
+  }
+
+  .filter-chip {
+    font-family: var(--font-arabic);
+    font-size: 0.78rem;
+    font-weight: 700;
+    padding: 5px 12px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    background: var(--surface-card);
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .filter-chip:hover {
+    color: var(--text-primary);
+    background: var(--surface-hover);
+  }
+
+  .filter-chip.active {
+    background: var(--accent-orange);
+    color: #fff;
+    border-color: var(--accent-orange);
+  }
+
+  .results-meta {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    font-weight: 600;
+  }
+
+  .results-meta b {
+    color: var(--accent-orange);
+    font-family: var(--font-mono);
+  }
+
+  /* Dictation Cards List */
+  .list-container {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .dictation-card {
+    background: var(--surface-card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.35);
+  }
+
+  .dictation-card:hover {
+    border-color: rgba(255, 255, 255, 0.14);
+    box-shadow: 0 6px 25px rgba(0, 0, 0, 0.5);
+  }
+
+  .dictation-card.reviewed {
+    border-left: 4px solid var(--green);
+  }
+
+  .card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .card-badges {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .pill {
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    border: 1px solid transparent;
+  }
+
+  .pill.date {
+    background: var(--surface);
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    border-color: var(--border);
+  }
+
+  .pill.dur {
+    background: var(--accent-orange-dim);
+    color: var(--accent-orange);
+    font-family: var(--font-mono);
+  }
+
+  .pill.lang {
+    background: var(--blue-dim);
+    color: var(--blue);
+  }
+
+  .pill.done {
+    background: var(--green-dim);
+    color: var(--green);
+  }
+
+  .pill.words {
+    background: var(--surface);
+    color: #bbb;
+    border-color: var(--border);
+  }
+
+  /* Audio Bar */
+  .audio-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 14px;
+    background: #0E0E11;
+    padding: 8px 12px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+  }
+
+  audio {
+    flex: 1;
+    height: 32px;
+  }
+
+  .speed-selector {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .speed-btn {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 6px;
+    background: var(--surface);
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .speed-btn:hover {
+    color: var(--text-primary);
+    background: var(--surface-hover);
+  }
+
+  .speed-btn.active {
+    background: var(--accent-orange);
+    color: #fff;
+    border-color: var(--accent-orange);
+  }
+
+  /* Card Content */
+  .transcript-box {
+    position: relative;
+    margin-bottom: 14px;
+  }
+
+  .transcript-editor {
+    width: 100%;
+    background: #0E0E11;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 16px;
+    font-family: var(--font-arabic);
+    font-size: 1.05rem;
+    line-height: 1.8;
+    color: var(--text-primary);
+    direction: rtl;
+    resize: vertical;
+    transition: border-color 0.2s ease;
+  }
+
+  .transcript-editor:focus {
+    outline: none;
+    border-color: var(--border-focus);
+    background: #111115;
+  }
+
+  .raw-hyp-preview {
+    font-size: 0.85rem;
+    color: #888;
+    background: rgba(255, 255, 255, 0.03);
+    padding: 8px 12px;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    line-height: 1.6;
+    border-right: 3px solid #444;
+  }
+
+  .raw-hyp-preview b {
+    color: var(--text-muted);
+  }
+
+  /* Card Actions Toolbar */
+  .card-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+  }
+
+  .main-btns {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .btn {
+    font-family: var(--font-arabic);
+    font-size: 0.82rem;
+    font-weight: 700;
+    padding: 6px 14px;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .btn.btn-copy {
+    background: var(--surface);
+    color: var(--text-primary);
+    border-color: var(--border);
+  }
+  .btn.btn-copy:hover {
+    background: var(--surface-hover);
+    border-color: rgba(255, 255, 255, 0.2);
+  }
+
+  .btn.btn-correct {
+    background: var(--green-dim);
+    color: var(--green);
+    border-color: rgba(52, 199, 89, 0.3);
+  }
+  .btn.btn-correct:hover {
+    background: var(--green);
+    color: #0B0B0B;
+  }
+
+  .btn.btn-save {
+    background: var(--accent-orange-dim);
+    color: var(--accent-orange);
+    border-color: rgba(255, 106, 0, 0.35);
+  }
+  .btn.btn-save:hover {
+    background: var(--accent-orange);
+    color: #fff;
+  }
+
+  .btn.btn-del {
+    background: transparent;
+    color: var(--red);
+    border-color: transparent;
+  }
+  .btn.btn-del:hover {
+    background: var(--red-dim);
+    border-color: rgba(255, 69, 58, 0.3);
+  }
+
+  /* AI Action Buttons (Phase 2) */
+  .ai-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .btn-ai {
+    font-family: var(--font-arabic);
+    font-size: 0.78rem;
+    font-weight: 700;
+    padding: 5px 12px;
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.05);
+    color: #D1D1D6;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .btn-ai:hover {
+    background: var(--purple-dim);
+    color: var(--purple);
+    border-color: rgba(191, 90, 242, 0.4);
+  }
+
+  .btn-ai.active {
+    background: var(--purple);
+    color: #fff;
+  }
+
+  /* AI Output Box */
+  .ai-result-box {
+    margin-top: 12px;
+    background: #111116;
+    border: 1px solid rgba(191, 90, 242, 0.3);
+    border-radius: 12px;
+    padding: 14px 16px;
+    position: relative;
+    animation: fadeIn 0.25s ease;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .ai-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    font-size: 0.8rem;
+    font-weight: 800;
+    color: var(--purple);
+  }
+
+  .ai-text {
+    font-size: 0.95rem;
+    line-height: 1.7;
+    color: var(--text-primary);
+    white-space: pre-wrap;
+    margin-bottom: 10px;
+  }
+
+  .ai-actions {
+    display: flex;
+    gap: 8px;
+  }
+
+  /* Suggestion Chips */
+  .sugg-box {
+    margin-top: 12px;
+    padding: 10px 14px;
+    background: #151A24;
+    border: 1px solid rgba(10, 132, 255, 0.25);
+    border-radius: 12px;
+    font-size: 0.82rem;
+  }
+
+  .sugg-box h5 {
+    font-size: 0.8rem;
+    color: var(--blue);
+    margin-bottom: 6px;
+  }
+
+  .rule-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #0E0E11;
+    border: 1px solid var(--border);
+    padding: 3px 10px;
+    border-radius: 8px;
+    margin: 3px 4px;
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+  }
+
+  .rule-chip button {
+    background: var(--blue-dim);
+    color: var(--blue);
+    border: 1px solid rgba(10, 132, 255, 0.3);
+    border-radius: 6px;
+    padding: 2px 8px;
+    font-family: var(--font-arabic);
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  /* Jargon Extractor Chips */
+  .jargon-chips {
+    margin-top: 8px;
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .jargon-chip {
+    background: rgba(255, 204, 0, 0.1);
+    color: var(--yellow);
+    border: 1px solid rgba(255, 204, 0, 0.25);
+    border-radius: 6px;
+    padding: 2px 8px;
+    font-size: 0.75rem;
+    font-family: var(--font-mono);
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .jargon-chip:hover {
+    background: var(--yellow);
+    color: #000;
+  }
+
+  /* Load More Button */
+  .load-more-wrap {
+    display: flex;
+    justify-content: center;
+    margin: 30px 0;
+  }
+
+  .btn-load-more {
+    font-family: var(--font-arabic);
+    font-size: 0.95rem;
+    font-weight: 700;
+    padding: 12px 32px;
+    border-radius: 30px;
+    background: var(--surface);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .btn-load-more:hover {
+    background: var(--surface-hover);
+    border-color: rgba(255, 255, 255, 0.2);
+    transform: translateY(-2px);
+  }
+
+  /* Toast Notification */
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background: #1C1C22;
+    color: #fff;
+    border: 1px solid var(--border);
+    padding: 10px 22px;
+    border-radius: 30px;
+    font-weight: 700;
+    font-size: 0.9rem;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    z-index: 1000;
+    opacity: 0;
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    pointer-events: none;
+  }
+
+  .toast.show {
+    transform: translateX(-50%) translateY(0);
+    opacity: 1;
+  }
+
+  mark {
+    background: rgba(255, 106, 0, 0.3);
+    color: #fff;
+    border-radius: 2px;
+    padding: 0 2px;
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text-muted);
+  }
+
+  .empty-state .icon {
+    font-size: 3rem;
+    margin-bottom: 12px;
+  }
+
+  @media (max-width: 768px) {
+    .header-inner { flex-direction: column; align-items: stretch; }
+    .nav-links { justify-content: flex-end; }
+    .card-actions { flex-direction: column; align-items: stretch; }
+  }
 </style>
 </head>
 <body>
-<main>
-  <p style="margin:0 0 10px"><a href="/">← تسجيل جمل القياس</a> &nbsp;&nbsp; <a href="/rules">← قواعد التصحيح</a></p>
-  <h1>مراجعة إملاءاتك</h1>
-  <p class="sub">اسمع كل إملاء، وإذا كتبه البرنامج بشكل غير صحيح عدّل النص ثم اضغط <b>حفظ</b>. البرنامج يقترح قواعد تصحيح من تعديلاتك،
-  وتُستعمل نفس التسجيلات لقياس الدقة. إذا كان صحيحاً اضغط <b>✓ صحيح</b>.</p>
-  <div class="bar">
-    <span id="count"></span>
-    <label><input type="checkbox" id="onlyNew" checked> غير المراجَع فقط</label>
+
+  <!-- Sticky Top Header -->
+  <header class="top-header">
+    <div class="header-inner">
+      <div class="brand">
+        <div class="logo-icon">🎙️</div>
+        <h1>مكتبة <span>Voice Typing</span></h1>
+      </div>
+      <nav class="nav-links">
+        <a href="/" class="nav-btn">← جمل القياس</a>
+        <a href="/rules" class="nav-btn">← قواعد التصحيح</a>
+        <button id="btnExportMd" class="nav-btn primary">📥 تصدير Markdown</button>
+        <button id="btnCopyAll" class="nav-btn">📋 نسخ المعروض</button>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <!-- Productivity Metrics Grid -->
+    <section class="metrics-grid">
+      <div class="metric-card">
+        <div class="metric-icon orange">🎙️</div>
+        <div class="metric-info">
+          <h4>إجمالي الإملاءات</h4>
+          <div class="val" id="statTotalCount">0</div>
+        </div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-icon green">⏱️</div>
+        <div class="metric-info">
+          <h4>إجمالي الساعات الصوتية</h4>
+          <div class="val" id="statTotalHours">0h</div>
+        </div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-icon blue">📝</div>
+        <div class="metric-info">
+          <h4>إجمالي الكلمات</h4>
+          <div class="val" id="statTotalWords">0</div>
+        </div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-icon purple">⚡</div>
+        <div class="metric-info">
+          <h4>الوقت الموفر المقدر</h4>
+          <div class="val" id="statTimeSaved">0h</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Toolbar: Search & Filters -->
+    <section class="toolbar">
+      <div class="search-wrapper">
+        <span class="search-icon">🔍</span>
+        <input type="text" id="searchInput" class="search-input" placeholder="ابحث في 1,600+ تسجيل صوتي، الكلمات، والملاحظات فوراً...">
+        <button id="searchClear" class="search-clear">✕</button>
+      </div>
+
+      <div class="filter-row">
+        <!-- Status Filter -->
+        <div class="chips-group">
+          <span class="filter-label">الحالة:</span>
+          <button class="filter-chip active" data-filter="status" data-val="all">الكل</button>
+          <button class="filter-chip" data-filter="status" data-val="unreviewed">غير مراجَع</button>
+          <button class="filter-chip" data-filter="status" data-val="reviewed">مراجَع ✓</button>
+        </div>
+
+        <!-- Duration Filter -->
+        <div class="chips-group">
+          <span class="filter-label">المدة:</span>
+          <button class="filter-chip active" data-filter="dur" data-val="all">الكل</button>
+          <button class="filter-chip" data-filter="dur" data-val="short">&lt; 5ث</button>
+          <button class="filter-chip" data-filter="dur" data-val="med">5-20ث</button>
+          <button class="filter-chip" data-filter="dur" data-val="long">&gt; 20ث</button>
+        </div>
+
+        <!-- Date Filter -->
+        <div class="chips-group">
+          <span class="filter-label">الفترة:</span>
+          <button class="filter-chip active" data-filter="date" data-val="all">الكل</button>
+          <button class="filter-chip" data-filter="date" data-val="today">اليوم</button>
+          <button class="filter-chip" data-filter="date" data-val="week">هذا الأسبوع</button>
+          <button class="filter-chip" data-filter="date" data-val="month">هذا الشهر</button>
+        </div>
+
+        <!-- Results Counter -->
+        <div class="results-meta">
+          عرض <b id="filteredCount">0</b> من أصل <b id="totalCount">0</b>
+        </div>
+      </div>
+    </section>
+
+    <!-- Cards Container -->
+    <section id="dictationList" class="list-container"></section>
+
+    <!-- Load More -->
+    <div id="loadMoreWrap" class="load-more-wrap" style="display:none;">
+      <button id="btnLoadMore" class="btn-load-more">عرض المزيد من الإملاءات ↓</button>
+    </div>
+  </main>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="toast">
+    <span class="toast-icon">✓</span>
+    <span id="toastMsg" class="toast-msg">تمت العملية بنجاح</span>
   </div>
-  <div id="list"></div>
-</main>
+
 <script>
 const TOKEN = "__TOKEN__";
 const $ = id => document.getElementById(id);
-let items = [];
+
+let rawItems = [];
+let filteredItems = [];
+let renderedCount = 0;
+const BATCH_SIZE = 30;
+
+// Current Active Filters
+const filters = {
+  search: "",
+  status: "all",
+  dur: "all",
+  date: "all"
+};
+
 async function api(path, body) {
-  const r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json", "X-Token": TOKEN }, body: JSON.stringify(body) });
+  const r = await fetch(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Token": TOKEN },
+    body: JSON.stringify(body)
+  });
   return r.json();
 }
-function esc(s) { return (s || "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
-async function load() { items = await (await fetch("/api/review")).json(); render(); }
-function render() {
-  const only = $("onlyNew").checked;
-  const reviewed = items.filter(i => i.text !== null).length;
-  $("count").textContent = `${items.length} إملاء · مراجَع: ${reviewed}`;
-  const shown = items.filter(i => !only || i.text === null);
-  if (!shown.length) { $("list").innerHTML = `<div class="empty">${items.length ? "كل الإملاءات مراجَعة 👏" : "لا توجد إملاءات محفوظة بعد. استعمل F1 وسجّل شيئاً."}</div>`; return; }
-  $("list").innerHTML = shown.map(i => `
-    <div class="card ${i.text !== null ? "done" : ""}" id="c-${i.id}">
-      <div class="meta"><span>${esc(i.recorded)}</span><span class="tag">${i.lang === "ar" ? "عربي" : i.lang === "en" ? "إنجليزي" : "تلقائي"}</span>
-        <span>${i.secs} ثانية</span>${i.text !== null ? '<span class="tag" style="color:#3ecf8e">مراجَع</span>' : ""}</div>
-      <audio controls preload="none" src="/auto/${i.id}.wav"></audio>
-      <div class="wrote">ما كتبه البرنامج:</div>
-      <div class="hyp">${esc(i.hyp) || "<i>(لم يكتب شيئاً" + (i.note ? ": " + esc(i.note) : "") + ")</i>"}</div>
-      <textarea rows="${Math.min(8, Math.max(2, Math.ceil((i.text ?? i.hyp).length / 70)))}" id="t-${i.id}">${esc(i.text ?? i.hyp)}</textarea>
-      <div class="row">
-        <button class="ok" onclick="same('${i.id}')">✓ صحيح</button>
-        <button class="primary" onclick="save('${i.id}')">حفظ التعديل</button>
-        <button class="del" onclick="del('${i.id}')">حذف</button>
-      </div>
-      <div id="s-${i.id}"></div>
-    </div>`).join("");
+
+function showToast(msg) {
+  const toast = $("toast");
+  $("toastMsg").textContent = msg;
+  toast.classList.add("show");
+  setTimeout(() => toast.classList.remove("show"), 2400);
 }
-function find(id) { return items.find(i => i.id === id); }
+
+function esc(s) {
+  return (s || "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+}
+
+function highlightText(text, q) {
+  if (!q || !text) return esc(text);
+  const escapedQ = q.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
+  const regex = new RegExp(`(${escapedQ})`, "gi");
+  const parts = text.split(regex);
+  return parts.map((p, i) => regex.test(p) ? `<mark>${esc(p)}</mark>` : esc(p)).join("");
+}
+
+function extractTechWords(text) {
+  if (!text) return [];
+  const words = text.match(/[A-Za-z][A-Za-z0-9_.-]{2,}/g) || [];
+  const unique = Array.from(new Set(words.map(w => w.trim())));
+  return unique.slice(0, 4);
+}
+
+function updateMetrics() {
+  const total = rawItems.length;
+  let totalSecs = 0;
+  let totalWords = 0;
+
+  rawItems.forEach(i => {
+    totalSecs += (i.secs || 0);
+    const content = (i.text ?? i.hyp ?? "");
+    const words = content.trim().split(/\s+/).filter(Boolean).length;
+    totalWords += words;
+  });
+
+  const hours = (totalSecs / 3600).toFixed(1);
+  // Typing speed comparison: average typing is 40 wpm, speaking is ~140 wpm
+  const typingTimeHours = (totalWords / 40) / 60;
+  const speakingTimeHours = totalSecs / 3600;
+  const timeSaved = Math.max(0, typingTimeHours - speakingTimeHours).toFixed(1);
+
+  $("statTotalCount").textContent = total.toLocaleString();
+  $("statTotalHours").textContent = `${hours}h`;
+  $("statTotalWords").textContent = totalWords.toLocaleString();
+  $("statTimeSaved").textContent = `~${timeSaved}h`;
+}
+
+function applyFilters() {
+  const q = filters.search.trim().toLowerCase();
+  const now = new Date();
+
+  filteredItems = rawItems.filter(item => {
+    // Search
+    if (q) {
+      const hyp = (item.hyp || "").toLowerCase();
+      const text = (item.text || "").toLowerCase();
+      const rec = (item.recorded || "").toLowerCase();
+      if (!hyp.includes(q) && !text.includes(q) && !rec.includes(q)) return false;
+    }
+
+    // Status
+    if (filters.status === "unreviewed" && item.text !== null) return false;
+    if (filters.status === "reviewed" && item.text === null) return false;
+
+    // Duration
+    const s = item.secs || 0;
+    if (filters.dur === "short" && s >= 5) return false;
+    if (filters.dur === "med" && (s < 5 || s > 20)) return false;
+    if (filters.dur === "long" && s <= 20) return false;
+
+    // Date
+    if (filters.date !== "all" && item.recorded) {
+      const itemDate = new Date(item.recorded.replace(" ", "T"));
+      const diffMs = now - itemDate;
+      const diffDays = diffMs / (1000 * 60 * 60 * 24);
+      if (filters.date === "today" && diffDays > 1) return false;
+      if (filters.date === "week" && diffDays > 7) return false;
+      if (filters.date === "month" && diffDays > 30) return false;
+    }
+
+    return true;
+  });
+
+  $("filteredCount").textContent = filteredItems.length.toLocaleString();
+  $("totalCount").textContent = rawItems.length.toLocaleString();
+
+  renderedCount = 0;
+  $("dictationList").innerHTML = "";
+  renderNextBatch();
+}
+
+function renderNextBatch() {
+  const nextItems = filteredItems.slice(renderedCount, renderedCount + BATCH_SIZE);
+  if (!nextItems.length && renderedCount === 0) {
+    $("dictationList").innerHTML = `
+      <div class="empty-state">
+        <div class="icon">🔍</div>
+        <h3>لم يتم العثور على أي نتائج مطابقة</h3>
+        <p>جرب تغيير كلمة البحث أو إعادة تعيين الفلاتر.</p>
+      </div>`;
+    $("loadMoreWrap").style.display = "none";
+    return;
+  }
+
+  const html = nextItems.map(item => {
+    const isReviewed = item.text !== null;
+    const currentText = item.text ?? item.hyp ?? "";
+    const wordsCount = currentText.trim().split(/\s+/).filter(Boolean).length;
+    const techWords = extractTechWords(currentText);
+
+    return `
+      <div class="dictation-card ${isReviewed ? 'reviewed' : ''}" id="c-${item.id}">
+        <div class="card-top">
+          <div class="card-badges">
+            <span class="pill date">📅 ${esc(item.recorded || 'غير محدد')}</span>
+            <span class="pill dur">⏱️ ${item.secs || 0}ث</span>
+            <span class="pill lang">${item.lang === 'ar' ? 'عربي' : item.lang === 'en' ? 'English' : 'تلقائي'}</span>
+            <span class="pill words">${wordsCount} كلمة</span>
+            ${isReviewed ? '<span class="pill done">✓ مراجَع</span>' : ''}
+          </div>
+        </div>
+
+        <div class="audio-bar">
+          <audio controls preload="none" src="/auto/${item.id}.wav" id="aud-${item.id}"></audio>
+          <div class="speed-selector">
+            <button class="speed-btn active" onclick="setSpeed('${item.id}', 1.0, this)">1.0x</button>
+            <button class="speed-btn" onclick="setSpeed('${item.id}', 1.25, this)">1.25x</button>
+            <button class="speed-btn" onclick="setSpeed('${item.id}', 1.5, this)">1.5x</button>
+            <button class="speed-btn" onclick="setSpeed('${item.id}', 2.0, this)">2.0x</button>
+          </div>
+        </div>
+
+        ${isReviewed && item.hyp && item.hyp !== item.text ? `
+          <div class="raw-hyp-preview">
+            <b>النص المفرغ أصلاً:</b> ${highlightText(item.hyp, filters.search)}
+          </div>` : ''}
+
+        <div class="transcript-box">
+          <textarea class="transcript-editor" id="t-${item.id}" rows="${Math.min(8, Math.max(2, Math.ceil(currentText.length / 65)))}">${esc(currentText)}</textarea>
+        </div>
+
+        ${techWords.length ? `
+          <div class="jargon-chips">
+            <span style="font-size:0.75rem; color:#888;">مصطلحات مكتشفة:</span>
+            ${techWords.map(w => `<span class="jargon-chip" onclick="addVocab('${esc(w)}')">+ أضف "${esc(w)}" للقاموس</span>`).join('')}
+          </div>` : ''}
+
+        <div class="card-actions">
+          <div class="main-btns">
+            <button class="btn btn-copy" onclick="copyText('${item.id}')">📋 نسخ النص</button>
+            <button class="btn btn-correct" onclick="same('${item.id}')">✓ صحيح</button>
+            <button class="btn btn-save" onclick="save('${item.id}')">💾 حفظ التعديل</button>
+            <button class="btn btn-del" onclick="del('${item.id}')">🗑️ حذف</button>
+          </div>
+
+          <div class="ai-toolbar">
+            <span style="font-size:0.75rem; color:#888;">أوامر AI:</span>
+            <button class="btn-ai" onclick="runAi('${item.id}', 'summary')">✨ تلخيص</button>
+            <button class="btn-ai" onclick="runAi('${item.id}', 'prompt')">💡 برومبت</button>
+            <button class="btn-ai" onclick="runAi('${item.id}', 'formal')">📧 رسمي</button>
+            <button class="btn-ai" onclick="runAi('${item.id}', 'polish')">🧹 تصفية</button>
+          </div>
+        </div>
+
+        <div id="ai-box-${item.id}"></div>
+        <div id="s-${item.id}"></div>
+      </div>
+    `;
+  }).join("");
+
+  $("dictationList").insertAdjacentHTML("beforeend", html);
+  renderedCount += nextItems.length;
+
+  if (renderedCount < filteredItems.length) {
+    $("loadMoreWrap").style.display = "flex";
+  } else {
+    $("loadMoreWrap").style.display = "none";
+  }
+}
+
+function setSpeed(id, rate, btn) {
+  const aud = $("aud-" + id);
+  if (aud) aud.playbackRate = rate;
+  const parent = btn.parentElement;
+  parent.querySelectorAll('.speed-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+function copyText(id) {
+  const text = $("t-" + id).value;
+  navigator.clipboard.writeText(text).then(() => {
+    showToast("تم نسخ النص إلى الحافظة ✓");
+  });
+}
+
+async function addVocab(word) {
+  const r = await api("/api/review/vocab", { word });
+  if (r.ok) {
+    showToast(r.added ? `أُضيف "${word}" للقاموس بنجاح ✓` : `"${word}" موجود مسبقاً في القاموس`);
+  } else {
+    showToast("تعذر الإضافة: " + (r.error || "خطأ غير معروف"));
+  }
+}
+
+async function same(id) {
+  const item = rawItems.find(i => i.id === id);
+  if (!item) return;
+  $("t-" + id).value = item.hyp;
+  await save(id);
+}
+
 async function save(id) {
   const text = $("t-" + id).value;
   const r = await api("/api/review/save", { id, text });
-  find(id).text = text;
+  const item = rawItems.find(i => i.id === id);
+  if (item) item.text = text;
+
+  const card = $("c-" + id);
+  if (card) card.classList.add("reviewed");
+
   const box = $("s-" + id);
-  let html = `<div class="status">انحفظ ✓</div>`;
+  let html = `<div style="color:var(--green); font-size:0.85rem; margin-top:8px;">انحفظ بنجاح ✓</div>`;
   if (r.suggestions && r.suggestions.length) {
-    html += `<div class="sugg">قواعد مقترحة من تعديلك (تُطبَّق تلقائياً على كل إملاء قادم):<br>` + r.suggestions.map((s, k) =>
-      `<span class="chip" id="r-${id}-${k}">${esc(s.wrong)} ← ${esc(s.right)} <button onclick='rule("${id}",${k},${JSON.stringify(s.wrong)},${JSON.stringify(s.right)})'>أضف القاعدة</button></span>`).join("") + `</div>`;
+    html += `
+      <div class="sugg-box">
+        <h5>قواعد تصحيح مقترحة من تعديلك (تُطبَّق تلقائياً في الإملاءات القادمة):</h5>
+        ${r.suggestions.map((s, k) => `
+          <span class="rule-chip" id="r-${id}-${k}">
+            ${esc(s.wrong)} ← ${esc(s.right)}
+            <button onclick='applyRule("${id}", ${k}, ${JSON.stringify(s.wrong)}, ${JSON.stringify(s.right)})'>أضف القاعدة</button>
+          </span>
+        `).join("")}
+      </div>`;
   }
   box.innerHTML = html;
-  $("count").textContent = `${items.length} إملاء · مراجَع: ${items.filter(i => i.text !== null).length}`;
+  showToast("تم الحفظ بنجاح ✓");
+  updateMetrics();
 }
-async function same(id) { $("t-" + id).value = find(id).hyp; await save(id); }
-async function rule(id, k, wrong, right) {
+
+async function applyRule(id, k, wrong, right) {
   const r = await api("/api/review/rule", { wrong, right });
-  $(`r-${id}-${k}`).innerHTML = `${esc(wrong)} ← ${esc(right)} ${r.added ? "✓ أُضيفت" : "(موجودة)"}`;
+  const chip = $(`r-${id}-${k}`);
+  if (chip) {
+    chip.innerHTML = `${esc(wrong)} ← ${esc(right)} ${r.added ? "✓ أُضيفت" : "(موجودة)"}`;
+  }
+  showToast(r.added ? "تمت إضافة القاعدة إلى corrections.txt ✓" : "القاعدة موجودة مسبقاً");
 }
+
 async function del(id) {
-  if (!confirm("حذف هذا التسجيل ونصه نهائياً؟")) return;
-  await api("/api/review/delete", { id });
-  items = items.filter(i => i.id !== id); render();
+  if (!confirm("هل أنت متأكد من حذف هذا التسجيل الصوتي ونصه نهائياً؟")) return;
+  const r = await api("/api/review/delete", { id });
+  if (r.ok) {
+    rawItems = rawItems.filter(i => i.id !== id);
+    filteredItems = filteredItems.filter(i => i.id !== id);
+    const card = $("c-" + id);
+    if (card) card.remove();
+    showToast("تم حذف التسجيل بنجاح");
+    updateMetrics();
+  }
 }
-$("onlyNew").onchange = render;
+
+// Phase 2: AI Action Runner
+async function runAi(id, action) {
+  const text = $("t-" + id).value;
+  if (!text.trim()) {
+    showToast("النص فارغ!");
+    return;
+  }
+
+  const box = $("ai-box-" + id);
+  box.innerHTML = `
+    <div class="ai-result-box">
+      <div class="ai-header">
+        <span>جاري المعالجة عبر Gemini Flash Lite... ⚡</span>
+      </div>
+      <div class="ai-text" style="color:#888;">يرجى الانتظار ثانية واحدة...</div>
+    </div>`;
+
+  const titles = {
+    summary: "ملخص في نقاط عمل (Summary)",
+    prompt: "برومبت هندسي منظم (Promptify)",
+    formal: "صياغة رسمية / بريد إلكتروني",
+    polish: "تصفية التأتأة والتردد"
+  };
+
+  try {
+    const r = await api("/api/review/ai_action", { text, action });
+    if (r.ok && r.result) {
+      box.innerHTML = `
+        <div class="ai-result-box">
+          <div class="ai-header">
+            <span>✨ نتيجة الذكاء الاصطناعي: ${titles[action] || action}</span>
+            <button onclick="this.closest('.ai-result-box').remove()" style="background:none; border:none; color:#888; cursor:pointer;">✕ إغلاق</button>
+          </div>
+          <div class="ai-text" id="ai-res-text-${id}">${esc(r.result)}</div>
+          <div class="ai-actions">
+            <button class="btn btn-copy" onclick="copyAiResult('${id}')">📋 نسخ النتيجة</button>
+            <button class="btn btn-save" onclick="applyAiToEditor('${id}')">استبدال النص في المحرر ↵</button>
+          </div>
+        </div>`;
+      showToast("تمت معالجة النص بالذكاء الاصطناعي ✓");
+    } else {
+      box.innerHTML = `<div style="color:var(--red); font-size:0.85rem; margin-top:8px;">تعذر المعالجة: ${esc(r.error || 'خطأ غير معروف')}</div>`;
+    }
+  } catch(e) {
+    box.innerHTML = `<div style="color:var(--red); font-size:0.85rem; margin-top:8px;">حدث خطأ في الاتصال: ${esc(e.message)}</div>`;
+  }
+}
+
+function copyAiResult(id) {
+  const resEl = $("ai-res-text-" + id);
+  if (resEl) {
+    navigator.clipboard.writeText(resEl.textContent).then(() => {
+      showToast("تم نسخ نتيجة الذكاء الاصطناعي ✓");
+    });
+  }
+}
+
+function applyAiToEditor(id) {
+  const resEl = $("ai-res-text-" + id);
+  if (resEl) {
+    $("t-" + id).value = resEl.textContent;
+    $("ai-box-" + id).innerHTML = "";
+    showToast("تم نقل النتيجة إلى محرر النص ✓");
+  }
+}
+
+// Markdown Exporter
+function exportMarkdown() {
+  if (!filteredItems.length) {
+    showToast("لا توجد نصوص لتصديرها!");
+    return;
+  }
+
+  let md = `# أرشيف إملاءات Voice Typing\n\n`;
+  md += `تم التصدير بتاريخ: ${new Date().toLocaleString('ar-EG')}\n`;
+  md += `إجمالي الإملاءات المصدرة: ${filteredItems.length}\n\n---\n\n`;
+
+  filteredItems.forEach((i, idx) => {
+    const text = i.text ?? i.hyp ?? "";
+    md += `### ${idx + 1}. تسجيل [${i.recorded || 'بدون تاريخ'}] (المدة: ${i.secs || 0}ث)\n\n`;
+    md += `${text}\n\n`;
+    if (i.hyp && i.text && i.hyp !== i.text) {
+      md += `> **المفرغ أولاً:** ${i.hyp}\n\n`;
+    }
+    md += `---\n\n`;
+  });
+
+  const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `VoiceTyping_Export_${new Date().toISOString().slice(0,10)}.md`;
+  a.click();
+  showToast("تم تنزيل ملف Markdown بنجاح 📥");
+}
+
+function copyAllFiltered() {
+  if (!filteredItems.length) return;
+  const allText = filteredItems.map(i => (i.text ?? i.hyp ?? "").trim()).filter(Boolean).join("\n\n---\n\n");
+  navigator.clipboard.writeText(allText).then(() => {
+    showToast(`تم نسخ ${filteredItems.length} إملاء إلى الحافظة ✓`);
+  });
+}
+
+// Infinite Scroll / Load More
+window.addEventListener("scroll", () => {
+  if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 500) {
+    if (renderedCount < filteredItems.length) {
+      renderNextBatch();
+    }
+  }
+});
+
+// Event Listeners
+$("btnLoadMore").addEventListener("click", renderNextBatch);
+$("btnExportMd").addEventListener("click", exportMarkdown);
+$("btnCopyAll").addEventListener("click", copyAllFiltered);
+
+// Search
+$("searchInput").addEventListener("input", e => {
+  filters.search = e.target.value;
+  $("searchClear").style.display = filters.search ? "block" : "none";
+  applyFilters();
+});
+
+$("searchClear").addEventListener("click", () => {
+  $("searchInput").value = "";
+  filters.search = "";
+  $("searchClear").style.display = "none";
+  applyFilters();
+});
+
+// Filter Chips
+document.querySelectorAll(".filter-chip").forEach(chip => {
+  chip.addEventListener("click", () => {
+    const filterType = chip.getAttribute("data-filter");
+    const val = chip.getAttribute("data-val");
+    chip.parentElement.querySelectorAll(".filter-chip").forEach(c => c.classList.remove("active"));
+    chip.classList.add("active");
+    filters[filterType] = val;
+    applyFilters();
+  });
+});
+
+// Init Load
+async function load() {
+  try {
+    rawItems = await (await fetch("/api/review")).json();
+    updateMetrics();
+    applyFilters();
+  } catch(e) {
+    console.error("Load error:", e);
+    showToast("تعذر تحميل البيانات من الخادم");
+  }
+}
+
 load();
 </script>
 </body>
