@@ -990,8 +990,8 @@ class App:
             self.reason = "Too quiet, check the microphone"
             return ""
         peak = float(np.max(np.abs(audio)))
-        if peak < 0.3:  # quiet microphone: bring it up, but never enough to turn noise into "speech"
-            audio = np.clip(audio * min(0.5 / peak, 6.0), -1, 1)
+        if peak < 0.65:  # quiet microphone: normalize to optimal Whisper speech level (~0.80 peak)
+            audio = np.clip(audio * min(0.80 / max(peak, 0.01), 6.0), -1, 1)
         if (self.cfg["language_mode"] == "smart" and not forced  # a hand-picked language is final
                 and (lang != "ar" or self.cfg["detect_with_arabic_keyboard"])):  # detection costs ~0.7 s
             lang = self.last_lang = self._smart_lang(model, audio, lang)
